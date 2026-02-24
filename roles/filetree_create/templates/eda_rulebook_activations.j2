@@ -30,19 +30,19 @@ eda_rulebook_activations:
 {% if template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].rulebook_name is defined
       or template_overrides_global.eda_rulebook_activation.rulebook_name is defined
       or current_rulebook_activations_asset_value.rulebook_name is defined %}
-    rulebook_name: "{{ current_rulebook_activations_asset_value.rulebook_name }}"
+    rulebook: "{{ current_rulebook_activations_asset_value.rulebook_name }}"
 {% endif %}
 {% if template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].organization_name is defined
       or template_overrides_global.eda_rulebook_activation.organization_name is defined
       or query_organization_name is defined %}
-    organization_name: "{{ template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].organization_name
+    organization: "{{ template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].organization_name
                            | default(template_overrides_global.eda_rulebook_activation.organization_name)
                            | default(query_organization_name) }}"
 {% endif %}
 {% if template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].project_name is defined
       or template_overrides_global.eda_rulebook_activation.project_name is defined
       or query_project_name is defined %}
-    project_name: "{{ template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].project_name
+    project: "{{ template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].project_name
                                    | default(template_overrides_global.eda_rulebook_activation.project_name)
                                    | default(query_project_name) }}"
 {% endif %}
@@ -52,6 +52,29 @@ eda_rulebook_activations:
     decision_environment: "{{ template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].decision_environment
                                    | default(template_overrides_global.eda_rulebook_activation.decision_environment)
                                    | default(query_decision_environment_name) }}"
+{% endif %}
+{% if template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].eda_credentials is defined
+        or template_overrides_global.eda_rulebook_activation.eda_credentials is defined
+        or current_rulebook_activations_asset_value.eda_credentials is defined %}
+    eda_credentials:
+{%   for credential in current_rulebook_activations_asset_value.eda_credentials %}
+      - "{{ credential.name }}"
+{%   endfor %}
+{% endif %}
+{% if template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].restart_policy is defined
+        or template_overrides_global.eda_rulebook_activation.restart_policy is defined
+        or current_rulebook_activations_asset_value.restart_policy is defined %}
+    restart_policy: "{{ current_rulebook_activations_asset_value.restart_policy }}"
+{% endif %}
+{% if template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].log_level is defined
+        or template_overrides_global.eda_rulebook_activation.log_level is defined
+        or current_rulebook_activations_asset_value.log_level is defined %}
+    log_level: "{{ current_rulebook_activations_asset_value.log_level }}"
+{% endif %}
+{% if template_overrides_resources.eda_rulebook_activation[current_rulebook_activations_asset_value.name].k8s_service_name is defined
+        or template_overrides_global.eda_rulebook_activation.k8s_service_name is defined
+        or current_rulebook_activations_asset_value.k8s_service_name is defined %}
+    k8s_service_name: "{{ current_rulebook_activations_asset_value.k8s_service_name }}"
 {% endif %}
 {% if last_rulebook_activation | default(true) | bool %}
 ...

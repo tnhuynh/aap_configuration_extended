@@ -1,15 +1,40 @@
 ---
 - name: "Get current Rulebook Activations from the API"
   ansible.builtin.set_fact:
-    rulebook_activations_lookvar: "{{ query('ansible.platform.gateway_api', 'api/eda/v1/activations/',
-                                query_params=(query_params | combine({'id': rulebook_activation_id} if rulebook_activation_id is defined else {})),
-                                host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,
-                                return_all=true, max_objects=query_eda_api_max_objects, errors='ignore')
-                       }}"
+    query_result: >-
+      {{ query(
+        'ansible.platform.gateway_api', 'api/eda/v1/activations/',
+        query_params=( query_params | combine(
+          {'id': rulebook_activation_id} if rulebook_activation_id is defined else {}
+        )),
+        host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,
+        return_all=true, max_objects=query_eda_api_max_objects, errors='ignore')
+      }}
+    rulebook_activations_lookvar: []
   vars:
     query_params:
       order_by: 'organization_id,id'
   no_log: "{{ eda_configuration_filetree_create_secure_logging }}"
+
+- name: "Resolve object ids to the object names 1"
+  ansible.builtin.set_fact:
+    rulebook_activations_lookvar: >-
+      {{ rulebook_activations_lookvar + [
+          item | combine({
+            'organization': lookup(
+              'ansible.platform.gateway_api', 'api/eda/v1/organizations/' ~ item.organization_id,
+              host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,
+              expect_one=true,
+            ).name
+          })
+        ]
+      }}
+  loop: "{{ query_result }}"
+  no_log: "{{ eda_configuration_filetree_create_secure_logging }}"
+
+# - name: debug
+#   debug:
+#     var: rulebook_activations_lookvar
 
 # state is present but all of the following are missing: rulebook_name, decision_environment_name, project_name
 - name: "Continue only if there has no errors with the previous API query"
@@ -74,8 +99,8 @@
             mode: '0755'
           vars:
             __path: "{{ output_path }}/{{ needed_path | regex_replace('/', '_') }}/eda_rulebook_activations"
-          loop: "{{ (rulebook_activations_lookvar | selectattr('organization_id', 'defined') |
-                    map(attribute='organization_id') | list | flatten | unique) +
+          loop: "{{ (rulebook_activations_lookvar | selectattr('organization', 'defined') |
+                    map(attribute='organization') | list | flatten | unique) +
                     ([organization] if ((rulebook_activations_lookvar | selectattr('organization', 'undefined') | list) | flatten | length > 0) else [])
                 }}"
           loop_control:
@@ -88,14 +113,10 @@
             dest: "{{ __dest }}"
             mode: '0644'
           vars:
-            rulebook_activation_organization: "{{ current_rulebook_activations_asset_value.organization_id | default(organization, true) }}"
+            rulebook_activation_organization: "{{ current_rulebook_activations_asset_value.organization | default(organization, true) }}"
             rulebook_activation_id: "{{ current_rulebook_activations_asset_value.id }}"
             rulebook_activation_name: "{{ current_rulebook_activations_asset_value.name | regex_replace('/', '_') }}"
             __dest: "{{ output_path }}/{{ rulebook_activation_organization | regex_replace('/', '_') }}/eda_rulebook_activations/{{ (rulebook_activation_id ~ '_') if omit_id is not defined else '' }}{{ rulebook_activation_name | regex_replace('/', '_') }}.yaml"
-            query_organization_name: "{{ (query('ansible.platform.gateway_api', 'api/eda/v1/organizations/' + current_rulebook_activations_asset_value.decision_environment_id | string,
-                                                host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,
-                                                return_all=true, max_objects=query_eda_api_max_objects) | first).name
-                                     }}"
             query_decision_environment_name: "{{ (query('ansible.platform.gateway_api', 'api/eda/v1/decision-environments/',
                                                        query_params={'id': current_rulebook_activations_asset_value.decision_environment_id},
                                                        host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,

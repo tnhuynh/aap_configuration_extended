@@ -1,14 +1,40 @@
 ---
 - name: "Get current Projects from the API"
   ansible.builtin.set_fact:
-    projects_lookvar: "{{ query('ansible.platform.gateway_api', 'api/eda/v1/projects/',
-                                query_params=(query_params | combine({'id': project_id} if project_id is defined else {})),
-                                host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,
-                                return_all=true, max_objects=query_eda_api_max_objects, errors='ignore')
-                       }}"
+    query_result: >-
+      {{ query(
+          'ansible.platform.gateway_api', 'api/eda/v1/projects/',
+          query_params=( query_params | combine(
+            {'organization_id': organization_id} if organization_id is defined else {},
+            {'id': project_id} if project_id is defined else {}
+          )),
+          host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,
+          return_all=true, max_objects=query_eda_api_max_objects, errors='ignore')
+      }}
+    projects_lookvar: []
   vars:
     query_params:
       order_by: 'organization_id,id'
+  no_log: "{{ eda_configuration_filetree_create_secure_logging }}"
+
+- name: "Resolve object ids to the object names 1"
+  ansible.builtin.set_fact:
+    projects_lookvar: >-
+      {{ projects_lookvar + [
+          item | combine({
+            'organization': lookup(
+              'ansible.platform.gateway_api', 'api/eda/v1/organizations/' ~ item.organization_id,
+              host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs,
+              expect_one=true,
+            ).name,
+            'eda_credential': lookup(
+              'ansible.platform.gateway_api', 'api/eda/v1/eda-credentials/' ~ item.eda_credential_id,
+              host=aap_hostname, oauth_token=aap_oauthtoken, verify_ssl=aap_validate_certs
+            ).name,
+          })
+        ]
+      }}
+  loop: "{{ query_result }}"
   no_log: "{{ eda_configuration_filetree_create_secure_logging }}"
 
 - name: "Continue only if there has no errors with the previous API query"
@@ -16,7 +42,7 @@
     - projects_lookvar | length > 0
     - projects_lookvar | first | length > 0
   block:
-    - name: "Block for to generate flatten output"
+    - name: "Block to generate filetree_create flatten output"
       when:
         - flatten_output is defined
         - flatten_output | bool
@@ -58,7 +84,7 @@
             line: ''
             state: absent
 
-    - name: "Block for to generate the filetre_create normal output"
+    - name: "Block to generate filetree_create normal output"
       when: flatten_output is not defined or not (flatten_output | bool)
       block:
         - name: "Create the <ORGANIZATION_NAME>/eda_projects output directory for projects in {{ output_path }}"
@@ -68,8 +94,8 @@
             mode: '0755'
           vars:
             __path: "{{ output_path }}/{{ needed_path | regex_replace('/', '_') }}/eda_projects"
-          loop: "{{ (projects_lookvar | selectattr('organization_id', 'defined') |
-                    map(attribute='organization_id') | list | flatten | unique) +
+          loop: "{{ (projects_lookvar | selectattr('organization', 'defined') |
+                    map(attribute='organization') | list | flatten | unique) +
                     ([organization] if ((projects_lookvar | selectattr('organization', 'undefined') | list) | flatten | length > 0) else [])
                 }}"
           loop_control:
@@ -82,7 +108,7 @@
             dest: "{{ __dest }}"
             mode: '0644'
           vars:
-            project_organization: "{{ current_projects_asset_value.organization_id | default(organization, true) }}"
+            project_organization: "{{ current_projects_asset_value.organization | default(organization, true) }}"
             project_id: "{{ current_projects_asset_value.id }}"
             project_name: "{{ current_projects_asset_value.name | regex_replace('/', '_') }}"
             __dest: "{{ output_path }}/{{ project_organization | regex_replace('/', '_') }}/eda_projects/{{ (project_id ~ '_') if omit_id is not defined else '' }}{{ project_name | regex_replace('/', '_') }}.yaml"
